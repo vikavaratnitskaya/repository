@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 import argparse
 import paramiko
 import os
 import sys
 import re
+import hashlib
 
 def verify_arguments(argv):
     usage = "syncer.py -pas ssh_password lpath local_path \
@@ -23,42 +25,71 @@ def verify_arguments(argv):
     args = parser.parse_args()
     return args
 
+# The isolation of elements to transfer (host,port,user,path) without "password"
 def splitter(args):
     string = args.rpath
+    port = None
     strUsrHst = string.split("@")
     usrPrt = strUsrHst[0]
-
     user = strUsrHst[0]
-
-    a = re.search(',',usrPrt)
+    a = re.search(',', usrPrt)
     if a is not None:
         elts = usrPrt.split(',')
-        if elts[0] == '22' or elts[0] == '2222':
-            port = elts[0]
-            user = elts[1]
-        if elts[1] == '22' or elts[1] == '2222':
-            port = elts[1]
+        if elts[0].isalpha():
             user = elts[0]
-
-    a = re.search(':',usrPrt)
+            port = elts[1]
+        else:
+            user = elts[1]
+            port = elts[0]
+        intPort = int(port)
+        if 1 > intPort or intPort > 65535:
+            print "Invalid number of port! The port will be set by default."
+            port = '22'
+    a = re.search(':', usrPrt)
     if a is not None:
         elts = usrPrt.split(':')
-        if elts[0] == '22' or elts[0] == '2222':
-            port = elts[0]
-            user = elts[1]
-        if elts[1] == '22' or elts[1] == '2222':
-            port = elts[1]
+        if elts[0].isalpha():
             user = elts[0]
-
+            port = elts[1]
+        else:
+            user = elts[1]
+            port = elts[0]
+        intPort = int(port)
+        if 1 > intPort or intPort > 65535:
+            print "Invalid number of port! The port will be set by default."
+            port = '22'
     hstPth = strUsrHst[1].split(':')
     host = hstPth[0]
-
     if len(hstPth)==2:
         path_ = hstPth[1]
     else: path_ = "/home/"+user+"/"
-    ids = [host, user, path_]
+    ids = [host, user, path_, port]
     return ids
 
+# Function to compare the hash of local and remote lists of files and directories (return list "schedule" to copy)
+# It takes lists after command like "os.system ('ls')" from local and remote machine
+def md5_checker(lstLcl,lstRmt):
+    schedule = []
+    schedule.extend(lstLcl)
+    x = 0
+    while x < len(lstLcl):
+        hshLcl = hashlib.md5(lstLcl[x]).hexdigest()
+        y = 0
+        while y < len(lstRmt):
+            hshRmt = hashlib.md5(lstRmt[y]).hexdigest()
+            if hshLcl == hshRmt:
+                schedule.remove(lstRmt[y])
+            y=y+1
+        x=x+1
+    return schedule
+
+# Function to compare the hash of local and remote lists of files and directories
+# Returns a list of the files are not copied)
+def sccss_checker(schedule,lstRmt):
+    compareList = md5_checker(schedule, lstRmt)
+    if len(compareList) != 0:
+        print "Attention! Files: ",compareList," not copied!"
+    return compareList
 
 def ssh_open(args, ids):
     while True:
@@ -95,7 +126,9 @@ def main():
     args = verify_arguments(sys.argv)
     ids = splitter(args)
     ssh = ssh_open(args, ids)
+#   md5_checker()
     file_copy(args, ids)
+#   sccss_checker()
     ssh_close(ssh)
 
 if __name__ == "__main__":
