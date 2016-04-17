@@ -3,6 +3,9 @@ import paramiko
 import os
 import sys
 import re
+import logging
+import socket
+
 
 def verify_arguments(argv):
     usage = "syncer.py -pas ssh_password lpath local_path \
@@ -20,10 +23,16 @@ def verify_arguments(argv):
         default = None, help = "single file to copy")
     parser.add_argument("rpath", action = "store",
         default = None, help = "Remote path")
+    parser.add_argument("-loglevel", dest='loglevel', action = "store",
+                        default = 'DEBUG',
+                        choices={'DEBUG', 'INFO', 'WARN', 'ERROR'},
+                        help = "Set logging level")
+    parser.add_argument("-logpath", dest='logpath', action = "store",
+        default = '/tmp/tears.log', help = "Define logging file path")
     args = parser.parse_args()
     return args
 
-def splitter(args):
+def splitter(args, log):
     string = args.rpath
     strUsrHst = string.split("@")
     usrPrt = strUsrHst[0]
@@ -51,8 +60,11 @@ def splitter(args):
             user = elts[0]
 
     hstPth = strUsrHst[1].split(':')
-    host = hstPth[0]
 
+    source_ip = socket.gethostbyname(socket.gethostname())
+
+    host = hstPth[0]
+    log.info("%s to %s" % (source_ip, host))
     if len(hstPth)==2:
         path_ = hstPth[1]
     else: path_ = "/home/"+user+"/"
@@ -66,37 +78,57 @@ def ssh_open(args, ids):
         try:
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            if args.pas == None:
+            if args.pas is None:
                 client.connect(hostname=ids[0], username=ids[1])
             else:
                 client.connect(hostname=ids[0], username=ids[1], password=args.pas)
             print "Connected to %s" % ids[0]
             break
         except paramiko.AuthenticationException:
-            print "Authentication failed when connecting to %s" % ids[0]
-            sys.exit(1)
+            log.error("Authentication failed when "
+                      "connecting to %s" % ids[0])
+            raise
     return client
 
 def ssh_close(client):
     client.close()
-    
+
 def file_copy(args, ids):
     if "/" in args.rpath:
-        os.system("rsync --rsync-path=/usr/bin/rsync --checksum %s -%s %s"
-                   % (args.lpath, args.rsync, args.rpath))
+        code = os.system("rsync --rsync-path=/usr/bin/rsync"
+                         " --checksum %s -%s %s"
+                         % (args.lpath, args.rsync, args.rpath))
     else:
         merge_path = args.rpath + ":" + args.lpath
-        print merge_path 
-        os.system("rsync --rsync-path=/usr/bin/rsync --checksum %s -%s %s"
-                   % (args.lpath, args.rsync, merge_path))
+        print merge_path
+        code = os.system("rsync --rsync-path=/usr/bin/rsync"
+                         " --checksum %s -%s %s"
+                         % (args.lpath, args.rsync, merge_path))
+    if code > 0:
+        log.error("rsync fails with error code %s" % code)
+        sys.exit(1)
 
 
 def main():
     args = verify_arguments(sys.argv)
-    ids = splitter(args)
+
+    logging.basicConfig(
+        filename=args.logpath,
+        level=getattr(logging, args.loglevel),
+        format='%(levelname)s:%(asctime)s:%(message)s')
+
+    print
+    log = logging.getLogger(__name__)
+    log.debug("DebugTest!")
+
+
+    ids = splitter(args, log)
+    print ids
+
     ssh = ssh_open(args, ids)
     file_copy(args, ids)
     ssh_close(ssh)
+
 
 if __name__ == "__main__":
     main()
