@@ -100,7 +100,11 @@ def file_copy(args, ids):
                          % (args.lpath, args.rsync, args.rpath))
     else:
         merge_path = args.rpath + ":" + args.lpath
+<<<<<<< HEAD
         print merge_path
+=======
+        print merge_path 
+>>>>>>> origin/master
         code = os.system("rsync --rsync-path=/usr/bin/rsync"
                          " --checksum %s -%s %s"
                          % (args.lpath, args.rsync, merge_path))
@@ -117,9 +121,15 @@ def main():
         level=getattr(logging, args.loglevel),
         format='%(levelname)s:%(asctime)s:%(message)s')
 
+<<<<<<< HEAD
     print
     log = logging.getLogger(__name__)
     log.debug("DebugTest!")
+=======
+    print 
+    log = logging.getLogger(__name__)
+    log.debug("Debug Test!")
+>>>>>>> origin/master
 
 
     ids = splitter(args, log)
@@ -129,6 +139,10 @@ def main():
     file_copy(args, ids)
     ssh_close(ssh)
 
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> origin/master
 if __name__ == "__main__":
     main()
